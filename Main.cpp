@@ -1,4 +1,4 @@
-﻿
+
 # include <Siv3D.hpp> // OpenSiv3D v0.4.3
 
 using namespace std;
@@ -97,19 +97,24 @@ public:
 	double count;//worningが出る
 	double u, eta, alpha, delta;
 	vector <double> w;
+	double Random() {
+		int now = rand();
+		double ret = now;
+		while (ret > 1)ret = ret / 10.0;
+		return ret;
+	}
 	void init(int num)
 	{
 		int i;
 		n = num;
-		alpha = 1.0;
-		count = 1.0;
+		alpha = 2.0;
 		eta = 0.05;
 		w.resize(n);
 		//乱数(-1.000 ~ 1.000)で初期化
-		for (i = 0; i < n; i++)w[i] = 2 * Random() - 1;
+		for (i = 0; i < n; i++)w[i] = Random();
 	};
 	void reset() {
-		for (int i = 0; i < n; i++)w[i] = 2 * Random() - 1;
+		for (int i = 0; i < n; i++)w[i] = Random();
 	};
 	double calc(vector<double> x)
 	{
@@ -126,7 +131,7 @@ public:
 		delta = alpha * out * (1 - out) * sumdelta;
 		for (i = 0; i < n; i++)
 		{
-			w[i] = w[i] + eta * delta * out;
+			w[i] = w[i] + eta * delta * x[i];
 		}
 		return;
 	};
@@ -136,8 +141,9 @@ class NNetwork {
 public:
 	vector<vector<Neuron>> net;//ネットワーク
 	vector<vector<double>> table;//計算結果を入れておくところ
-	void init(int entry = 1, int end = 1, int depth = 3, int width = 10) {
-		//入力の数、出力の幅、層の深さ、層の幅
+	void init(int entry = 2, int end = 1, int depth = 1, int width = 2) {
+		//入力の数、出力の幅、中間層の深さ、層の幅
+		srand(time(NULL));
 		for (int i = 0; i < depth; i++)net.push_back(vector<Neuron>(width));
 
 		net.push_back(vector<Neuron>(end));//出力層を追加
@@ -147,12 +153,11 @@ public:
 				table[i].push_back(0.0);
 			}
 		}
-		for (int i = 0; i < width; i++) {
-			net[0][i].init(entry);
-		}
-		for (int i = 1; i < net.size(); i++) {
+
+		for (int i = 0; i < net.size(); i++) {
 			for (int j = 0; j < net[i].size(); j++) {
-				net[i][j].init(width);
+				if (i == 0)net[i][j].init(entry);//入力層だけ別で処理
+				else net[i][j].init(width);
 			}
 		}
 	};
@@ -165,15 +170,22 @@ public:
 				else table[i][j] = net[i][j].calc(table[i - 1]);
 			}
 		}
-		return table[table.size() - 1];//最後の出力が出力層の出力
+		vector<double> ret;
+		for (int i = 0; i < table[table.size() - 1].size(); i++)ret.push_back(table[table.size() - 1][i]);
+		return ret;//最後の出力が出力層の出力
 	};
 	void learn(vector<double> ans, vector<double> inp) {
+		calc(inp);
 		if (ans.size() != table[table.size() - 1].size())return;//出力層のサイズと教師信号が違ったら駄目
-		for (int i = table.size() - 1; i >= 0; i--) {
-			for (int j = 0; j < table[i].size(); j++) {
-				if (i == table.size() - 1)net[i][j].learn(table[i - 1], table[i][j], ans[j] - table[i][j]);
-				else if (i == 0)for (int k = 0; k < table[i + 1].size(); k++)net[i][j].learn(inp, table[i][j], net[i + 1][k].delta * net[i + 1][k].w[j]);
-				else for (int k = 0; k < table[i + 1].size(); k++)net[i][j].learn(table[i - 1], table[i][j], net[i + 1][k].delta * net[i + 1][k].w[j]);
+		for (int i = net.size() - 1; i >= 0; i--) {
+			for (int j = 0; j < net[i].size(); j++) {
+				if (i == 0) {
+					for (int k = 0; k < net[i + 1].size(); k++) {
+						net[i][j].learn(inp, table[i][j], net[i + 1][k].delta * net[i + 1][k].w[j]);
+					}
+				}
+				else if (i == table.size() - 1)net[i][j].learn(table[i - 1], table[i][j], ans[j] - table[i][j]);
+				else for (int k = 0; k < net[i + 1].size(); k++)net[i][j].learn(table[i - 1], table[i][j], net[i + 1][k].delta * net[i + 1][k].w[j]);
 			}
 		}
 	};
